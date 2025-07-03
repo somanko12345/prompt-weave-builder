@@ -19,55 +19,161 @@ export interface GenerateWebsiteResponse {
   error?: string;
 }
 
-// Mock AI service for demo
+// Real AI service using OpenRouter API
 export const aiService = {
   // Generate website from prompt using OpenRouter
   generateWebsite: async (request: GenerateWebsiteRequest): Promise<GenerateWebsiteResponse> => {
     console.log('Generating website with prompt:', request.prompt);
     
-    // Simulate API processing time
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    // Mock responses based on prompt content
-    const isLandingPage = request.prompt.toLowerCase().includes('landing');
-    const isPortfolio = request.prompt.toLowerCase().includes('portfolio');
-    const isEcommerce = request.prompt.toLowerCase().includes('ecommerce') || request.prompt.toLowerCase().includes('store');
-    
-    let mockResponse: GenerateWebsiteResponse;
-    
-    if (isLandingPage) {
-      mockResponse = {
-        html: generateLandingPageHTML(),
-        css: '',
-        js: '',
+    try {
+      // Step 1: Enhance prompt using Gemini
+      const enhancedPrompt = await enhancePrompt(request.prompt);
+      
+      // Step 2: Generate code using DeepSeek
+      const generatedCode = await generateCode(enhancedPrompt, request.existingCode, request.isUpdate);
+      
+      return {
+        html: generatedCode.html,
+        css: generatedCode.css,
+        js: generatedCode.js,
         success: true
       };
-    } else if (isPortfolio) {
-      mockResponse = {
-        html: generatePortfolioHTML(),
-        css: '',
-        js: '',
-        success: true
-      };
-    } else if (isEcommerce) {
-      mockResponse = {
-        html: generateEcommerceHTML(),
-        css: '',
-        js: '',
-        success: true
-      };
-    } else {
-      mockResponse = {
+    } catch (error: any) {
+      console.error('AI generation error:', error);
+      return {
         html: generateDefaultHTML(request.prompt),
         css: '',
         js: '',
-        success: true
+        success: false,
+        error: error.message || 'AI generation failed'
       };
     }
-    
-    return mockResponse;
   }
 };
+
+// Enhance prompt using Gemini
+async function enhancePrompt(originalPrompt: string): Promise<string> {
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer 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`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'google/gemini-2.0-flash-exp:free',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a web design expert. Take the user\'s prompt and enhance it with specific technical details, design considerations, and modern web development best practices. Make it detailed enough for a code generator to create a beautiful, functional website. Focus on UI/UX, responsive design, accessibility, and modern styling.'
+        },
+        {
+          role: 'user',
+          content: `Enhance this website prompt with technical details: "${originalPrompt}"`
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 1000
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Prompt enhancement failed: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0]?.message?.content || originalPrompt;
+}
+
+// Generate code using DeepSeek
+async function generateCode(
+  prompt: string, 
+  existingCode?: { html: string; css: string; js: string },
+  isUpdate?: boolean
+): Promise<{ html: string; css: string; js: string }> {
+  const systemPrompt = `You are an expert web developer. Generate clean, modern HTML, CSS, and JavaScript code based on the prompt. 
+
+IMPORTANT REQUIREMENTS:
+- Return ONLY valid HTML, CSS, and JavaScript code
+- Use modern CSS with Flexbox/Grid for layouts
+- Include responsive design with mobile-first approach
+- Use semantic HTML elements
+- Add proper accessibility attributes
+- Include smooth animations and transitions
+- Use modern JavaScript (ES6+) if needed
+- Ensure cross-browser compatibility
+- Follow web standards and best practices
+
+${isUpdate && existingCode ? `
+EXISTING CODE TO UPDATE:
+HTML: ${existingCode.html}
+CSS: ${existingCode.css}
+JS: ${existingCode.js}
+
+Update the existing code based on the new prompt while maintaining existing functionality.
+` : ''}
+
+Format your response as JSON:
+{
+  "html": "your HTML content here",
+  "css": "your CSS content here", 
+  "js": "your JavaScript content here"
+}`;
+
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer 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`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'deepseek/deepseek-r1-0528:free',
+      messages: [
+        {
+          role: 'system',
+          content: systemPrompt
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 4000
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Code generation failed: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices[0]?.message?.content;
+  
+  if (!content) {
+    throw new Error('No content generated');
+  }
+
+  try {
+    // Try to parse as JSON first
+    const parsed = JSON.parse(content);
+    return {
+      html: parsed.html || '',
+      css: parsed.css || '',
+      js: parsed.js || ''
+    };
+  } catch {
+    // Fallback: extract code from markdown-style blocks
+    const htmlMatch = content.match(/```html\n([\s\S]*?)\n```/);
+    const cssMatch = content.match(/```css\n([\s\S]*?)\n```/);
+    const jsMatch = content.match(/```(?:javascript|js)\n([\s\S]*?)\n```/);
+    
+    return {
+      html: htmlMatch?.[1] || generateDefaultHTML(prompt),
+      css: cssMatch?.[1] || '',
+      js: jsMatch?.[1] || ''
+    };
+  }
+}
 
 // Mock HTML generators
 function generateLandingPageHTML(): string {

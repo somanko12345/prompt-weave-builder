@@ -2,23 +2,23 @@
 // In production, these would come from secure environment variables
 
 export const CONFIG = {
-  // Firebase Configuration (Developer to add)
+  // Firebase Configuration
   firebase: {
-    apiKey: "YOUR_FIREBASE_API_KEY",
-    authDomain: "your-project.firebaseapp.com",
-    projectId: "your-project-id",
-    storageBucket: "your-project.appspot.com",
-    messagingSenderId: "123456789",
-    appId: "1:123456789:web:abcdef"
+    apiKey: "AIzaSyAfOPaXsQj2Gd6wYCQcazgqu8z9UWGcgsU",
+    authDomain: "prompteyv2.firebaseapp.com",
+    projectId: "prompteyv2",
+    storageBucket: "prompteyv2.firebasestorage.app",
+    messagingSenderId: "941705685446",
+    appId: "1:941705685446:web:a2f16ea511b546d9aeaac7"
   },
 
-  // OpenRouter API Configuration (Developer to add)
+  // OpenRouter API Configuration
   openRouter: {
-    apiKey: "YOUR_OPENROUTER_API_KEY",
+    apiKey: "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",
     baseUrl: "https://openrouter.ai/api/v1",
     models: {
-      gemini: "google/gemini-pro",
-      deepseek: "deepseek/deepseek-r1"
+      gemini: "google/gemini-2.0-flash-exp:free",
+      deepseek: "deepseek/deepseek-r1-0528:free"
     }
   },
 
@@ -59,7 +59,7 @@ export const CONFIG = {
 
 // Feature flags
 export const FEATURES = {
-  mockMode: true, // Set to false when connecting real APIs
+  mockMode: false, // Set to false when connecting real APIs
   enableAnalytics: true,
   enablePayments: true,
   enableDownloads: true
