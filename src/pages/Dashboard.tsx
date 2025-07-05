@@ -9,69 +9,20 @@ import { Progress } from '@/components/ui/progress';
 import { Plus, Folder, Download, Star, Zap } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { aiService } from '@/services/ai';
+import { useAuth } from '@/hooks/useAuth';
+import { createProject, updateProject, incrementUserUsage } from '@/services/database';
 import { CONFIG } from '@/config/constants';
 
-// Mock user data - in real app, this would come from authentication
-interface User {
-  name: string;
-  email: string;
-  photoURL: string;
-  plan: 'free' | 'premium';
-  region: 'IN' | 'INTL';
-  promptsUsed: number;
-  maxPrompts: number;
-  projectsCount: number;
-  maxProjects: number;
-}
-
-const mockUser: User = {
-  name: 'John Doe',
-  email: 'john@example.com',
-  photoURL: '',
-  plan: 'free',
-  region: 'IN',
-  promptsUsed: 2,
-  maxPrompts: 5,
-  projectsCount: 3,
-  maxProjects: 5
-};
-
-// Mock generated code - in real app, this would come from AI API
-const mockGeneratedCode = {
-  html: `
-    <div class="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-pink-900">
-      <div class="container mx-auto px-6 py-20">
-        <div class="text-center space-y-8">
-          <h1 class="text-6xl font-bold text-white mb-6">
-            Welcome to the Future
-          </h1>
-          <p class="text-xl text-blue-200 max-w-2xl mx-auto">
-            Experience innovation like never before with our cutting-edge platform designed for modern businesses.
-          </p>
-          <div class="flex flex-col sm:flex-row gap-4 justify-center">
-            <button class="px-8 py-4 bg-white text-purple-900 rounded-lg font-semibold hover:bg-blue-50 transition-colors">
-              Get Started
-            </button>
-            <button class="px-8 py-4 border border-white text-white rounded-lg font-semibold hover:bg-white hover:text-purple-900 transition-colors">
-              Learn More
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  `,
-  css: '',
-  js: ''
-};
-
 const Dashboard = () => {
-  const [user, setUser] = useState(mockUser);
+  const { user, loading } = useAuth();
   const [currentProject, setCurrentProject] = useState<string | null>(null);
   const [generatedCode, setGeneratedCode] = useState<any>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   const handleGenerate = async (prompt: string) => {
+    if (!user) return;
+    
     setIsGenerating(true);
     
     try {
@@ -83,16 +34,36 @@ const Dashboard = () => {
       });
       
       if (response.success) {
-        setGeneratedCode({
+        const newCode = {
           html: response.html,
           css: response.css,
           js: response.js
-        });
+        };
+        setGeneratedCode(newCode);
         
-        setUser(prev => ({
-          ...prev,
-          promptsUsed: prev.promptsUsed + 1
-        }));
+        // Create or update project
+        if (!currentProject) {
+          const project = await createProject({
+            userId: user.id,
+            name: `Project ${Date.now()}`,
+            prompt,
+            html: response.html,
+            css: response.css,
+            js: response.js,
+            isPublic: false
+          });
+          setCurrentProject(project.id);
+        } else {
+          await updateProject(currentProject, {
+            prompt,
+            html: response.html,
+            css: response.css,
+            js: response.js
+          });
+        }
+        
+        // Increment user usage
+        await incrementUserUsage(user.id, 'promptsUsed');
         
         toast({
           title: "Website generated!",
@@ -101,10 +72,10 @@ const Dashboard = () => {
       } else {
         throw new Error(response.error || 'Generation failed');
       }
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Generation failed",
-        description: "Please try again later.",
+        description: error.message || "Please try again later.",
         variant: "destructive"
       });
     } finally {
@@ -113,7 +84,7 @@ const Dashboard = () => {
   };
 
   const handleDownload = () => {
-    if (user.plan === 'free') {
+    if (!user?.plan || user.plan === 'free') {
       setShowPaymentModal(true);
     } else {
       // Handle download logic
@@ -125,10 +96,11 @@ const Dashboard = () => {
   };
 
   const handlePaymentSuccess = (planId: string) => {
-    setUser(prev => ({
-      ...prev,
-      plan: planId === 'premium-monthly' ? 'premium' : 'free'
-    }));
+    // Handle payment success - in real app this would update user in database
+    toast({
+      title: "Payment successful!",
+      description: "Your plan has been upgraded.",
+    });
     
     // Handle download after payment
     setTimeout(() => {
@@ -139,9 +111,35 @@ const Dashboard = () => {
     }, 1000);
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Please sign in</h1>
+          <p className="text-muted-foreground">You need to be signed in to access the dashboard.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const maxProjects = CONFIG.plans[user.plan].maxProjects;
+  const maxPrompts = CONFIG.plans[user.plan].maxPrompts;
+  const canDownload = CONFIG.plans[user.plan].canDownload;
+
   return (
     <div className="min-h-screen bg-background">
-      <Header user={user} onSignOut={() => console.log('Sign out')} />
+      <Header user={user} />
       
       <main className="container mx-auto px-6 py-8">
         {/* Stats Cards */}
@@ -154,11 +152,11 @@ const Dashboard = () => {
               <div>
                 <p className="text-sm text-muted-foreground">Prompts Used</p>
                 <p className="text-xl font-bold text-foreground">
-                  {user.promptsUsed}/{user.maxPrompts}
+                  {user.promptsUsed}/{maxPrompts === -1 ? '∞' : maxPrompts}
                 </p>
               </div>
             </div>
-            <Progress value={(user.promptsUsed / user.maxPrompts) * 100} className="mt-3" />
+            <Progress value={maxPrompts === -1 ? 0 : (user.promptsUsed / maxPrompts) * 100} className="mt-3" />
           </Card>
 
           <Card className="p-6 glass-card">
@@ -169,7 +167,7 @@ const Dashboard = () => {
               <div>
                 <p className="text-sm text-muted-foreground">Projects</p>
                 <p className="text-xl font-bold text-foreground">
-                  {user.projectsCount}/{user.maxProjects}
+                  {user.projectCount}/{maxProjects === -1 ? '∞' : maxProjects}
                 </p>
               </div>
             </div>
@@ -216,7 +214,7 @@ const Dashboard = () => {
           </div>
           
           <div className="flex items-center space-x-3">
-            <Button variant="outline" className="btn-ghost">
+            <Button variant="outline" className="btn-ghost" onClick={() => window.location.href = '/projects'}>
               <Folder className="w-4 h-4 mr-2" />
               My Projects
             </Button>
@@ -234,9 +232,9 @@ const Dashboard = () => {
           onDownload={handleDownload}
           generatedCode={generatedCode}
           isGenerating={isGenerating}
-          canDownload={user.plan !== 'free'}
+          canDownload={canDownload}
           promptsUsed={user.promptsUsed}
-          maxPrompts={user.maxPrompts}
+          maxPrompts={maxPrompts === -1 ? 999 : maxPrompts}
         />
       </main>
 
@@ -244,7 +242,7 @@ const Dashboard = () => {
       <PaymentModal
         open={showPaymentModal}
         onClose={() => setShowPaymentModal(false)}
-        userRegion={user.region}
+        userRegion={(user.region as 'IN' | 'INTL') || 'INTL'}
         onPaymentSuccess={handlePaymentSuccess}
       />
     </div>

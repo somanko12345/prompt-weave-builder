@@ -51,7 +51,7 @@ export const aiService = {
   }
 };
 
-// Enhance prompt using Gemini
+// Enhance prompt using Qwen3
 async function enhancePrompt(originalPrompt: string): Promise<string> {
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
@@ -60,7 +60,7 @@ async function enhancePrompt(originalPrompt: string): Promise<string> {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'google/gemini-2.0-flash-exp:free',
+      model: 'qwen/qwen3-30b-a3b:free',
       messages: [
         {
           role: 'system',
@@ -126,7 +126,7 @@ Format your response as JSON:
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'deepseek/deepseek-r1-0528:free',
+      model: 'deepseek/deepseek-chat-v3:free',
       messages: [
         {
           role: 'system',

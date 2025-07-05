@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Header } from '@/components/Header';
 import { ProjectCard } from '@/components/ProjectCard';
 import { Button } from '@/components/ui/button';
@@ -7,63 +7,76 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Plus, Search, Folder } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
+import { getUserProjects, deleteProject, createProject } from '@/services/database';
+import { CONFIG } from '@/config/constants';
 
-// Mock user data
-const mockUser = {
-  name: 'John Doe',
-  email: 'john@example.com',
-  photoURL: '',
-  plan: 'free' as const,
-  region: 'IN' as const,
-  promptsUsed: 2,
-  maxPrompts: 5,
-  projectsCount: 3,
-  maxProjects: 5
-};
-
-// Mock projects data
-const mockProjects = [
-  {
-    id: '1',
-    name: 'SaaS Landing Page',
-    createdAt: new Date('2024-01-15'),
-    updatedAt: new Date('2024-01-20'),
-    promptsUsed: 3,
-    thumbnail: ''
-  },
-  {
-    id: '2',
-    name: 'Portfolio Website',
-    createdAt: new Date('2024-01-10'),
-    updatedAt: new Date('2024-01-18'),
-    promptsUsed: 2,
-    thumbnail: ''
-  },
-  {
-    id: '3',
-    name: 'E-commerce Store',
-    createdAt: new Date('2024-01-05'),
-    updatedAt: new Date('2024-01-16'),
-    promptsUsed: 4,
-    thumbnail: ''
-  }
-];
+interface Project {
+  id: string;
+  userId: string;
+  name: string;
+  prompt: string;
+  html: string;
+  css: string;
+  js: string;
+  createdAt: Date;
+  updatedAt: Date;
+  isPublic: boolean;
+  promptsUsed?: number; // Optional for compatibility
+}
 
 const Projects = () => {
-  const [user] = useState(mockUser);
-  const [projects, setProjects] = useState(mockProjects);
+  const { user, loading } = useAuth();
+  const [projects, setProjects] = useState<Project[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterBy, setFilterBy] = useState<'all' | 'public' | 'private'>('all');
+  const [loadingProjects, setLoadingProjects] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
-  const filteredProjects = projects.filter(project =>
-    project.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  useEffect(() => {
+    const fetchProjects = async () => {
+      if (!user) return;
+      
+      setLoadingProjects(true);
+      try {
+        const userProjects = await getUserProjects(user.id);
+        setProjects(userProjects);
+      } catch (error) {
+        console.error('Error fetching projects:', error);
+        toast({
+          title: "Error loading projects",
+          description: "Failed to load your projects",
+          variant: "destructive"
+        });
+      } finally {
+        setLoadingProjects(false);
+      }
+    };
+
+    fetchProjects();
+  }, [user]);
+
+  const filteredProjects = useMemo(() => {
+    return projects.filter(project => {
+      const matchesSearch = project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                           project.prompt.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesFilter = filterBy === 'all' || 
+                           (filterBy === 'public' && project.isPublic) ||
+                           (filterBy === 'private' && !project.isPublic);
+      
+      return matchesSearch && matchesFilter;
+    });
+  }, [projects, searchQuery, filterBy]);
 
   const handleCreateProject = async () => {
-    if (projects.length >= user.maxProjects) {
+    if (!user) return;
+    
+    const maxProjects = CONFIG.plans[user.plan].maxProjects;
+    if (projects.length >= maxProjects && maxProjects !== -1) {
       toast({
         title: "Project limit reached",
-        description: `Free plan allows up to ${user.maxProjects} projects. Upgrade to create more.`,
+        description: `${user.plan} plan allows up to ${maxProjects} projects. Upgrade to create more.`,
         variant: "destructive"
       });
       return;
@@ -71,17 +84,15 @@ const Projects = () => {
 
     setIsCreating(true);
     try {
-      // Simulate project creation
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const newProject = {
-        id: String(projects.length + 1),
+      const newProject = await createProject({
+        userId: user.id,
         name: `New Project ${projects.length + 1}`,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        promptsUsed: 0,
-        thumbnail: ''
-      };
+        prompt: '',
+        html: '',
+        css: '',
+        js: '',
+        isPublic: false
+      });
       
       setProjects(prev => [newProject, ...prev]);
       
@@ -89,6 +100,9 @@ const Projects = () => {
         title: "Project created!",
         description: "Your new project is ready to use.",
       });
+      
+      // Navigate to dashboard with new project
+      window.location.href = `/dashboard?project=${newProject.id}`;
     } catch (error) {
       toast({
         title: "Failed to create project",
@@ -102,32 +116,28 @@ const Projects = () => {
 
   const handleOpenProject = (projectId: string) => {
     // Navigate to builder with project
-    console.log('Opening project:', projectId);
-    window.location.href = '/dashboard';
+    window.location.href = `/dashboard?project=${projectId}`;
   };
 
-  const handleRenameProject = (projectId: string, newName: string) => {
-    setProjects(prev => prev.map(project =>
-      project.id === projectId ? { ...project, name: newName } : project
-    ));
-    
-    toast({
-      title: "Project renamed",
-      description: `Project renamed to "${newName}".`,
-    });
-  };
-
-  const handleDeleteProject = (projectId: string) => {
-    setProjects(prev => prev.filter(project => project.id !== projectId));
-    
-    toast({
-      title: "Project deleted",
-      description: "Project has been permanently deleted.",
-    });
+  const handleDeleteProject = async (projectId: string) => {
+    try {
+      await deleteProject(projectId);
+      setProjects(prev => prev.filter(p => p.id !== projectId));
+      toast({
+        title: "Project deleted",
+        description: "Your project has been deleted successfully"
+      });
+    } catch (error) {
+      toast({
+        title: "Error deleting project",
+        description: "Failed to delete the project",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleDownloadProject = (projectId: string) => {
-    if (user.plan === 'free') {
+    if (!user || user.plan === 'free') {
       toast({
         title: "Upgrade required",
         description: "Upgrade to premium to download projects.",
@@ -142,9 +152,33 @@ const Projects = () => {
     });
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Please sign in</h1>
+          <p className="text-muted-foreground">You need to be signed in to view your projects.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const maxProjects = CONFIG.plans[user.plan].maxProjects;
+
   return (
     <div className="min-h-screen bg-background">
-      <Header user={user} onSignOut={() => console.log('Sign out')} />
+      <Header user={user} />
       
       <main className="container mx-auto px-6 py-8">
         {/* Header */}
@@ -157,12 +191,12 @@ const Projects = () => {
           </div>
 
           <div className="flex items-center space-x-3">
-            <Badge variant={projects.length >= user.maxProjects ? "destructive" : "secondary"}>
-              {projects.length}/{user.maxProjects} projects
+            <Badge variant={user.projectCount >= maxProjects && maxProjects !== -1 ? "destructive" : "secondary"}>
+              {user.projectCount}/{maxProjects === -1 ? '∞' : maxProjects} projects
             </Badge>
             <Button 
               onClick={handleCreateProject}
-              disabled={isCreating || projects.length >= user.maxProjects}
+              disabled={isCreating || (user.projectCount >= maxProjects && maxProjects !== -1)}
               className="btn-primary"
             >
               {isCreating ? (
@@ -196,15 +230,19 @@ const Projects = () => {
         </Card>
 
         {/* Projects Grid */}
-        {filteredProjects.length > 0 ? (
+        {loadingProjects ? (
+          <div className="text-center py-12">
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading projects...</p>
+          </div>
+        ) : filteredProjects.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredProjects.map((project) => (
               <ProjectCard
                 key={project.id}
-                project={project}
+                project={{...project, promptsUsed: 0}}
                 onOpen={handleOpenProject}
-                onRename={handleRenameProject}
-                onDelete={handleDeleteProject}
+                onDelete={() => handleDeleteProject(project.id)}
                 onDownload={handleDownloadProject}
                 canDownload={user.plan !== 'free'}
               />
@@ -240,7 +278,7 @@ const Projects = () => {
                 </div>
                 <Button 
                   onClick={handleCreateProject}
-                  disabled={projects.length >= user.maxProjects}
+                  disabled={user.projectCount >= maxProjects && maxProjects !== -1}
                   className="btn-primary"
                 >
                   <Plus className="w-4 h-4 mr-2" />
@@ -252,7 +290,7 @@ const Projects = () => {
         )}
 
         {/* Upgrade Prompt for Free Users */}
-        {user.plan === 'free' && projects.length >= user.maxProjects && (
+        {user.plan === 'free' && user.projectCount >= maxProjects && maxProjects !== -1 && (
           <Card className="mt-8 p-6 glass-card border-primary/50">
             <div className="text-center space-y-4">
               <div className="w-12 h-12 mx-auto rounded-full bg-primary/20 flex items-center justify-center">

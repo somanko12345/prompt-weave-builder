@@ -17,8 +17,8 @@ export const CONFIG = {
     apiKey: "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",
     baseUrl: "https://openrouter.ai/api/v1",
     models: {
-      gemini: "google/gemini-2.0-flash-exp:free",
-      deepseek: "deepseek/deepseek-r1-0528:free"
+      qwen3: "qwen/qwen3-30b-a3b:free",
+      deepseek: "deepseek/deepseek-chat-v3:free"
     }
   },
 
