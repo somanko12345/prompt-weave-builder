@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Plus, Search, Folder } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { getUserProjects, deleteProject, createProject } from '@/services/database';
+import { getUserProjects, deleteProject, createProject, updateProject } from '@/services/database';
 import { CONFIG } from '@/config/constants';
 
 interface Project {
@@ -117,6 +117,25 @@ const Projects = () => {
   const handleOpenProject = (projectId: string) => {
     // Navigate to builder with project
     window.location.href = `/dashboard?project=${projectId}`;
+  };
+
+  const handleRenameProject = async (projectId: string, newName: string) => {
+    try {
+      await updateProject(projectId, { name: newName });
+      setProjects(prev => prev.map(project =>
+        project.id === projectId ? { ...project, name: newName } : project
+      ));
+      toast({
+        title: "Project renamed",
+        description: `Project renamed to "${newName}".`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error renaming project",
+        description: "Failed to rename the project",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleDeleteProject = async (projectId: string) => {
@@ -242,6 +261,7 @@ const Projects = () => {
                 key={project.id}
                 project={{...project, promptsUsed: 0}}
                 onOpen={handleOpenProject}
+                onRename={handleRenameProject}
                 onDelete={() => handleDeleteProject(project.id)}
                 onDownload={handleDownloadProject}
                 canDownload={user.plan !== 'free'}

@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useAuth } from '@/hooks/useAuth';
 
 interface HeaderProps {
   user?: {
@@ -16,10 +17,10 @@ interface HeaderProps {
     photoURL?: string;
     plan: 'free' | 'premium';
   } | null;
-  onSignOut?: () => void;
 }
 
-export const Header = ({ user, onSignOut }: HeaderProps) => {
+export const Header = ({ user }: HeaderProps) => {
+  const { signOut } = useAuth();
   return (
     <header className="w-full border-b border-border/50 backdrop-blur-xl bg-background/80 sticky top-0 z-50">
       <div className="container mx-auto px-6 py-4 flex items-center justify-between">
@@ -111,7 +112,7 @@ export const Header = ({ user, onSignOut }: HeaderProps) => {
                     <Settings className="mr-2 h-4 w-4" />
                     Settings
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={onSignOut}>
+                  <DropdownMenuItem onClick={signOut}>
                     <LogOut className="mr-2 h-4 w-4" />
                     Sign out
                   </DropdownMenuItem>

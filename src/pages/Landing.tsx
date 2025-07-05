@@ -1,12 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Check, Star, Zap, Folder, Download, Plus, User } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 import heroImage from '@/assets/hero-bg.jpg';
 
 const Landing = () => {
+  const { user, signInWithGoogle, loading } = useAuth();
   const [hoveredFeature, setHoveredFeature] = useState<number | null>(null);
+
+  // Redirect authenticated users to dashboard
+  useEffect(() => {
+    if (user && !loading) {
+      window.location.href = '/dashboard';
+    }
+  }, [user, loading]);
 
   const features = [
     {
@@ -62,10 +71,11 @@ const Landing = () => {
 
           <Button 
             className="btn-primary"
-            onClick={() => window.location.href = '/dashboard'}
+            onClick={signInWithGoogle}
+            disabled={loading}
           >
             <User className="w-4 h-4 mr-2" />
-            Sign In with Google
+            {loading ? 'Loading...' : 'Sign In with Google'}
           </Button>
         </div>
       </nav>
@@ -100,10 +110,11 @@ const Landing = () => {
             <Button 
               size="lg" 
               className="btn-primary backdrop-blur-sm"
-              onClick={() => window.location.href = '/dashboard'}
+              onClick={signInWithGoogle}
+              disabled={loading}
             >
               <Plus className="w-5 h-5 mr-2" />
-              Start Creating Free
+              {loading ? 'Loading...' : 'Start Creating Free'}
             </Button>
             <Button size="lg" variant="outline" className="btn-ghost backdrop-blur-sm border-white/30 text-white hover:bg-white/10">
               <Star className="w-5 h-5 mr-2" />
@@ -210,8 +221,10 @@ const Landing = () => {
 
                 <Button 
                   className={`w-full ${plan.popular ? 'btn-primary' : 'btn-ghost'}`}
+                  onClick={signInWithGoogle}
+                  disabled={loading}
                 >
-                  {plan.name === 'Free' ? 'Get Started Free' : 'Upgrade to Premium'}
+                  {loading ? 'Loading...' : (plan.name === 'Free' ? 'Get Started Free' : 'Upgrade to Premium')}
                 </Button>
               </Card>
             ))}
@@ -230,9 +243,14 @@ const Landing = () => {
               Join thousands of creators who are already building amazing websites with AI. 
               Start your journey today - it's completely free!
             </p>
-            <Button size="lg" className="btn-primary">
+            <Button 
+              size="lg" 
+              className="btn-primary"
+              onClick={signInWithGoogle}
+              disabled={loading}
+            >
               <Plus className="w-5 h-5 mr-2" />
-              Start Creating Now
+              {loading ? 'Loading...' : 'Start Creating Now'}
             </Button>
           </Card>
         </div>
